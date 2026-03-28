@@ -315,13 +315,23 @@ func (d *DemoEngine) drainPendingMatches() {
 	}
 }
 
+const broadcastLevels = 10
+
 // BroadcastOrderBook sends the current order book to all clients.
 func (d *DemoEngine) BroadcastOrderBook() {
 	ob := d.engine.OrderBook()
+	asks := ob.Asks
+	bids := ob.Bids
+	if len(asks) > broadcastLevels {
+		asks = asks[:broadcastLevels]
+	}
+	if len(bids) > broadcastLevels {
+		bids = bids[:broadcastLevels]
+	}
 	msg, _ := json.Marshal(map[string]interface{}{
 		"type": "orderbook",
-		"asks": ob.Asks,
-		"bids": ob.Bids,
+		"asks": asks,
+		"bids": bids,
 	})
 	d.hub.Broadcast(msg)
 }

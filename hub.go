@@ -57,6 +57,7 @@ func (h *Hub) Run() {
 				select {
 				case client.send <- msg:
 				default:
+					log.Printf("[hub] client send buffer full, removing client")
 					delete(h.clients, client)
 					close(client.send)
 				}

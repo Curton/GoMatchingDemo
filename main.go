@@ -143,17 +143,21 @@ func main() {
 				hub.Unregister(client)
 				conn.Close()
 			}()
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			for {
 				if _, _, err := conn.ReadMessage(); err != nil {
 					log.Printf("[ws] read error: %v", err)
 					return
 				}
+				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			}
 		}()
 
 		go func() {
 			for msg := range client.send {
+				conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
 				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					log.Printf("[ws] write error: %v", err)
 					return
 				}
 			}
