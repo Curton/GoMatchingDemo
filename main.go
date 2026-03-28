@@ -135,30 +135,91 @@ func main() {
 			log.Println("[ws] upgrade error:", err)
 			return
 		}
-		client := &Client{conn: conn, send: make(chan []byte, 64)}
+		client := &Client{conn: conn, send: make(chan []byte, 256)}
 		hub.Register(client)
 
+		readDone := make(chan struct{})
+		writeDone := make(chan struct{})
+
+		// Track pong activity to detect unresponsive clients
+		pongReceived := make(chan struct{}, 1)
+		pongTimeout := time.NewTicker(60 * time.Second) // Close if no pong for 60s
+		defer pongTimeout.Stop()
+
+		// Read goroutine - monitors incoming messages and pings
+		go func() {
+			defer close(readDone)
+
+			// Reset read deadline initially
+			if err := conn.SetReadDeadline(time.Now().Add(90 * time.Second)); err != nil {
+				log.Printf("[ws] set read deadline error: %v", err)
+				return
+			}
+
+			conn.SetPongHandler(func(appData string) error {
+				log.Printf("[ws] pong received")
+				if err := conn.SetReadDeadline(time.Now().Add(90 * time.Second)); err != nil {
+					log.Printf("[ws] pong handler: set read deadline error: %v", err)
+					return err
+				}
+				select {
+				case pongReceived <- struct{}{}:
+				default:
+				}
+				return nil
+			})
+
+			for {
+				select {
+				case <-writeDone:
+					return
+				case <-pongTimeout.C:
+					log.Printf("[ws] pong timeout - no response for 60s, closing connection")
+					return
+				default:
+					conn.SetReadDeadline(time.Now().Add(90 * time.Second))
+					if _, _, err := conn.ReadMessage(); err != nil {
+						log.Printf("[ws] read error: %v", err)
+						return
+					}
+				}
+			}
+		}()
+
+		// Write goroutine - sends broadcasts and pings, tracks pong responses
 		go func() {
 			defer func() {
 				hub.Unregister(client)
 				conn.Close()
+				close(writeDone)
 			}()
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			for {
-				if _, _, err := conn.ReadMessage(); err != nil {
-					log.Printf("[ws] read error: %v", err)
-					return
-				}
-				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			}
-		}()
 
-		go func() {
-			for msg := range client.send {
-				conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
-				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-					log.Printf("[ws] write error: %v", err)
+			pingTicker := time.NewTicker(20 * time.Second)
+			defer pingTicker.Stop()
+
+			for {
+				select {
+				case <-readDone:
 					return
+				case <-pongReceived:
+					// Reset pong timeout when we receive a pong
+					pongTimeout.Reset(60 * time.Second)
+				case msg, ok := <-client.send:
+					if !ok {
+						return
+					}
+					conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+					if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+						log.Printf("[ws] write error: %v", err)
+						return
+					}
+				case <-pingTicker.C:
+					conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+						log.Printf("[ws] ping error: %v", err)
+						return
+					}
+					log.Printf("[ws] ping sent")
 				}
 			}
 		}()

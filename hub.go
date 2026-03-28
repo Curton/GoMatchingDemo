@@ -57,9 +57,8 @@ func (h *Hub) Run() {
 				select {
 				case client.send <- msg:
 				default:
-					log.Printf("[hub] client send buffer full, removing client")
-					delete(h.clients, client)
-					close(client.send)
+					// Skip message — client write goroutine is momentarily behind.
+					// The pong timeout mechanism handles truly dead clients.
 				}
 			}
 			h.mu.Unlock()

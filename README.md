@@ -26,17 +26,23 @@
 git clone https://github.com/Curton/GoMatchingDemo.git
 git clone https://github.com/Curton/GoMatchingKernel.git
 
-# Build and run
+# Build and run (logs to ./log.txt)
 cd GoMatchingDemo
-go build -o GoMatchingDemo . && ./GoMatchingDemo
+./start.sh
 ```
 
 Open [http://localhost:8088](http://localhost:8088) in your browser.
 
+### View Live Logs
+
+```bash
+tail -f ./log.txt
+```
+
 ### Custom Port
 
 ```bash
-./GoMatchingDemo -addr :9090
+go build -o GoMatchingDemo . && ./GoMatchingDemo -addr :9090
 ```
 
 ## Architecture
