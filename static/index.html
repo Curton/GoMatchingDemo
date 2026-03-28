@@ -89,16 +89,14 @@ body { font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; background: #0a0
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Trades Matched</div><div class="stat-value" id="statTrades">0</div></div>
         <div class="stat-card"><div class="stat-label">Total Volume (BTC)</div><div class="stat-value" id="statVolume">0</div></div>
-        <div class="stat-card"><div class="stat-label">Buy Trades</div><div class="stat-value green" id="statBuys">0</div></div>
-        <div class="stat-card"><div class="stat-label">Sell Trades</div><div class="stat-value red" id="statSells">0</div></div>
+        <div class="stat-card"><div class="stat-label">Buy/Sell Trades</div><div class="stat-value" id="statBuysSells">0 / 0</div></div>
         <div class="stat-card"><div class="stat-label">Best Ask</div><div class="stat-value red" id="statAsk">-</div></div>
         <div class="stat-card"><div class="stat-label">Best Bid</div><div class="stat-value green" id="statBid">-</div></div>
         <div class="stat-card"><div class="stat-label">Spread</div><div class="stat-value" id="statSpread">-</div></div>
         <div class="stat-card"><div class="stat-label">Avg Feed vs Spread %</div><div class="stat-value" id="statAvgFeedDiff">-</div></div>
         <div class="stat-card"><div class="stat-label">Binance Trades</div><div class="stat-value" id="statBinance">0</div></div>
-        <div class="stat-card"><div class="stat-label">Ask Levels</div><div class="stat-value" id="statAskLevels">0</div></div>
-        <div class="stat-card"><div class="stat-label">Bid Levels</div><div class="stat-value" id="statBidLevels">0</div></div>
-        
+        <div class="stat-card"><div class="stat-label">ASK/BID LEVELS</div><div class="stat-value" id="statLevels">0 / 0</div></div>
+        <div class="stat-card"><div class="stat-label">Memory Sys</div><div class="stat-value" id="statMemSys">-</div></div>
       </div>
     </div>
   </div>
@@ -123,20 +121,46 @@ function fmtTime(ms) {
   return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3,'0');
 }
 
-// WebSocket
+// WebSocket with auto-reconnect
 let ws;
 let binanceConnected = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 30000;
+
+function getReconnectDelay() {
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+  return delay;
+}
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  const url = proto + '//' + location.host + '/ws';
+  console.log('[WS] Connecting to', url);
+  ws = new WebSocket(url);
+
   ws.onopen = () => {
+    console.log('[WS] Connected');
+    reconnectAttempts = 0;
     document.getElementById('wsDot').className = 'dot dot-green';
   };
-  ws.onclose = () => {
-    document.getElementById('wsDot').className = 'dot dot-red';
-    setTimeout(connect, 1000);
+
+  ws.onerror = (err) => {
+    console.log('[WS] Error:', err);
   };
+
+  ws.onclose = (e) => {
+    console.log('[WS] Closed:', e.code, e.reason);
+    document.getElementById('wsDot').className = 'dot dot-red';
+
+    // Don't reconnect on clean server-initiated close
+    if (e.code >= 1000 && e.code < 1015) {
+      reconnectAttempts++;
+      const delay = getReconnectDelay();
+      console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+      setTimeout(connect, delay);
+    }
+  };
+
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     switch(msg.type) {
@@ -229,11 +253,11 @@ function appendFeed(msg) {
 function updateStats(msg) {
   document.getElementById('statTrades').textContent = msg.total_trades.toLocaleString();
   document.getElementById('statVolume').textContent = fmtQty(msg.total_volume);
-  document.getElementById('statBuys').textContent = msg.buy_trades.toLocaleString();
-  document.getElementById('statSells').textContent = msg.sell_trades.toLocaleString();
+  const buysEl = document.getElementById('statBuysSells');
+  buysEl.innerHTML = '<span style="color:#00e676">' + msg.buy_trades.toLocaleString() + '</span> / <span style="color:#ff5252">' + msg.sell_trades.toLocaleString() + '</span>';
   document.getElementById('statBinance').textContent = msg.binance_trades.toLocaleString();
-  document.getElementById('statAskLevels').textContent = msg.ask_levels;
-  document.getElementById('statBidLevels').textContent = msg.bid_levels;
+  const levelsEl = document.getElementById('statLevels');
+  levelsEl.innerHTML = '<span style="color:#ff5252">' + msg.ask_levels + '</span> / <span style="color:#00e676">' + msg.bid_levels + '</span>';
 
   if (msg.best_ask > 0 && msg.best_ask < 9007199254740991) {
     document.getElementById('statAsk').textContent = fmtPrice(msg.best_ask);
@@ -260,6 +284,10 @@ function updateStats(msg) {
   } else {
     diffEl.textContent = '-';
     diffEl.className = 'stat-value';
+  }
+
+  if (msg.mem_sys !== undefined) {
+    document.getElementById('statMemSys').textContent = (msg.mem_sys / 1024 / 1024).toFixed(1) + ' MB';
   }
 }
 

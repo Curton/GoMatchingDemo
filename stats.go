@@ -1,6 +1,9 @@
 package main
 
-import "sync/atomic"
+import (
+	"runtime"
+	"sync/atomic"
+)
 
 // Stats holds atomic counters for the demo.
 type Stats struct {
@@ -18,6 +21,7 @@ type StatsSnapshot struct {
 	BuyTrades     int64
 	SellTrades    int64
 	BinanceTrades int64
+	MemSys        uint64
 }
 
 func NewStats() *Stats { return &Stats{} }
@@ -29,11 +33,14 @@ func (s *Stats) AddSell(n int64)     { s.sellTrades.Add(n) }
 func (s *Stats) AddBinance(n int64)  { s.binanceTrades.Add(n) }
 
 func (s *Stats) Snapshot() StatsSnapshot {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
 	return StatsSnapshot{
 		TotalTrades:   s.totalTrades.Load(),
 		TotalVolume:   s.totalVolume.Load(),
 		BuyTrades:     s.buyTrades.Load(),
 		SellTrades:    s.sellTrades.Load(),
 		BinanceTrades: s.binanceTrades.Load(),
+		MemSys:        m.Sys,
 	}
 }

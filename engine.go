@@ -368,6 +368,7 @@ func (d *DemoEngine) BroadcastStats() {
 		"ask_levels":     d.engine.AskLength(),
 		"bid_levels":     d.engine.BidLength(),
 		"avg_feed_diff":  avgFeedDiffPct,
+		"mem_sys":        snap.MemSys,
 	})
 	d.hub.Broadcast(msg)
 }
