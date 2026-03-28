@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GoMatchingKernel - BTC_USDT Live Demo</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; background: #0a0e17; color: #c8d6e5; font-size: 12px; }
+.header { background: #131a2a; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e2d4a; }
+.header h1 { font-size: 16px; color: #00d2ff; }
+.header .status { display: flex; gap: 16px; align-items: center; }
+.header .status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.dot-green { background: #00e676; box-shadow: 0 0 6px #00e676; }
+.dot-red { background: #ff5252; box-shadow: 0 0 6px #ff5252; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; height: calc(100vh - 45px); background: #1e2d4a; }
+.panel { background: #0d1321; padding: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.panel-title { color: #5c7cfa; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #1a2744; }
+.panel-body { flex: 1; overflow-y: auto; }
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-thumb { background: #2a3a5c; border-radius: 2px; }
+
+/* Order Book */
+.ob-table { width: 100%; border-collapse: collapse; }
+.ob-table td { padding: 2px 8px; position: relative; }
+.ob-row { position: relative; }
+.ob-bar { position: absolute; top: 0; bottom: 0; right: 0; opacity: 0.15; }
+.ob-bar-ask { background: #ff5252; }
+.ob-bar-bid { background: #00e676; }
+.ask-price { color: #ff5252; }
+.bid-price { color: #00e676; }
+.ob-size { text-align: right; color: #8899aa; }
+.spread-row td { text-align: center; color: #5c7cfa; padding: 4px; font-size: 11px; border-top: 1px solid #1a2744; border-bottom: 1px solid #1a2744; }
+
+/* Trades */
+.trade-table { width: 100%; border-collapse: collapse; }
+.trade-table th { text-align: left; color: #5c7cfa; font-size: 10px; text-transform: uppercase; padding: 4px 8px; position: sticky; top: 0; background: #0d1321; }
+.trade-table td { padding: 3px 8px; border-bottom: 1px solid #111b2e; }
+.trade-buy { color: #00e676; }
+.trade-sell { color: #ff5252; }
+
+/* Binance Feed */
+.feed-item { padding: 3px 0; border-bottom: 1px solid #111b2e; display: flex; justify-content: space-between; }
+
+/* Stats */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-card { background: #131a2a; border-radius: 6px; padding: 10px; border: 1px solid #1e2d4a; }
+.stat-label { color: #5c7cfa; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-value { color: #00d2ff; font-size: 18px; margin-top: 4px; }
+.stat-value.green { color: #00e676; }
+.stat-value.red { color: #ff5252; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>GoMatchingKernel | BTC_USDT</h1>
+  <div class="status">
+    <span><span class="dot dot-green" id="wsDot"></span> WebSocket</span>
+    <span><span class="dot dot-red" id="binanceDot"></span> Binance Feed</span>
+  </div>
+</div>
+<div class="grid">
+  <!-- Order Book -->
+  <div class="panel">
+    <div class="panel-title">Order Book</div>
+    <div class="panel-body" id="orderbook">
+      <table class="ob-table"><tbody id="obBody"></tbody></table>
+    </div>
+  </div>
+  <!-- Matched Trades -->
+  <div class="panel">
+    <div class="panel-title">Matched Trades (Kernel)</div>
+    <div class="panel-body" id="trades">
+      <table class="trade-table">
+        <thead><tr><th>Time</th><th>Side</th><th>Price</th><th>Size</th><th>Created By</th></tr></thead>
+        <tbody id="tradeBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Binance Feed -->
+  <div class="panel">
+    <div class="panel-title">Binance Live Feed</div>
+    <div class="panel-body" id="binanceFeed"></div>
+  </div>
+  <!-- Stats -->
+  <div class="panel">
+    <div class="panel-title">Statistics</div>
+    <div class="panel-body">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Trades Matched</div><div class="stat-value" id="statTrades">0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Volume (BTC)</div><div class="stat-value" id="statVolume">0</div></div>
+        <div class="stat-card"><div class="stat-label">Buy Trades</div><div class="stat-value green" id="statBuys">0</div></div>
+        <div class="stat-card"><div class="stat-label">Sell Trades</div><div class="stat-value red" id="statSells">0</div></div>
+        <div class="stat-card"><div class="stat-label">Best Ask</div><div class="stat-value red" id="statAsk">-</div></div>
+        <div class="stat-card"><div class="stat-label">Best Bid</div><div class="stat-value green" id="statBid">-</div></div>
+        <div class="stat-card"><div class="stat-label">Spread</div><div class="stat-value" id="statSpread">-</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Feed vs Spread %</div><div class="stat-value" id="statAvgFeedDiff">-</div></div>
+        <div class="stat-card"><div class="stat-label">Binance Trades</div><div class="stat-value" id="statBinance">0</div></div>
+        <div class="stat-card"><div class="stat-label">Ask Levels</div><div class="stat-value" id="statAskLevels">0</div></div>
+        <div class="stat-card"><div class="stat-label">Bid Levels</div><div class="stat-value" id="statBidLevels">0</div></div>
+        
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ONE = 1e9;
+const MAX_TRADES = 50;
+const MAX_FEED = 100;
+
+function fmtPrice(kernelPrice) {
+  return (kernelPrice / ONE).toFixed(2);
+}
+function fmtQty(kernelQty) {
+  const v = Math.abs(kernelQty / ONE);
+  if (v < 0.001) return v.toFixed(6);
+  if (v < 1) return v.toFixed(4);
+  return v.toFixed(2);
+}
+function fmtTime(ms) {
+  const d = new Date(ms);
+  return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3,'0');
+}
+
+// WebSocket
+let ws;
+let binanceConnected = false;
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  ws.onopen = () => {
+    document.getElementById('wsDot').className = 'dot dot-green';
+  };
+  ws.onclose = () => {
+    document.getElementById('wsDot').className = 'dot dot-red';
+    setTimeout(connect, 1000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    switch(msg.type) {
+      case 'orderbook': renderOrderBook(msg); break;
+      case 'trade': appendTrade(msg); break;
+      case 'binance': appendFeed(msg); break;
+      case 'stats': updateStats(msg); break;
+    }
+  };
+}
+
+function renderOrderBook(msg) {
+  const body = document.getElementById('obBody');
+  let html = '';
+
+  const asks = msg.asks || [];
+  const bids = msg.bids || [];
+
+  // Find max size for bar scaling
+  let maxAsk = 0, maxBid = 0;
+  for (const a of asks) if (Math.abs(a.size) > maxAsk) maxAsk = Math.abs(a.size);
+  for (const b of bids) if (Math.abs(b.size) > maxBid) maxBid = Math.abs(b.size);
+  const maxSize = Math.max(maxAsk, maxBid, 1);
+
+  // Show equal levels on each side of the spread, centered
+  const MAX_LEVELS = 20; // Show up to 25 levels per side
+  const halfLevels = Math.floor(MAX_LEVELS / 2);
+
+  // Same pattern as bids: slice first, then reverse
+  const asksToShow = [...asks].slice(0, halfLevels).reverse();
+  const bidsToShow = [...bids].slice(0, Math.min(halfLevels, bids.length));
+
+  // Render asks (highest at top, lowest near spread at bottom)
+  for (const a of asksToShow) {
+    const pct = (Math.abs(a.size) / maxSize * 100).toFixed(1);
+    html += `<tr><td class="ob-row ask-price">${fmtPrice(a.price)}</td>` +
+            `<td class="ob-row ob-size">${fmtQty(a.size)}<div class="ob-bar ob-bar-ask" style="width:${pct}%"></div></td></tr>`;
+  }
+
+  // Spread
+  if (asks.length && bids.length) {
+    const spread = (asks[0].price - bids[0].price) / ONE;
+    const spreadPct = ((asks[0].price - bids[0].price) / asks[0].price * 100).toFixed(4);
+    html += `<tr class="spread-row"><td colspan="2">Spread: ${spread.toFixed(2)} (${spreadPct}%)</td></tr>`;
+  }
+
+  // Render bids (highest bid at top, near spread)
+  for (const b of bidsToShow) {
+    const pct = (Math.abs(b.size) / maxSize * 100).toFixed(1);
+    html += `<tr><td class="ob-row bid-price">${fmtPrice(b.price)}</td>` +
+            `<td class="ob-row ob-size">${fmtQty(b.size)}<div class="ob-bar ob-bar-bid" style="width:${pct}%"></div></td></tr>`;
+  }
+
+  body.innerHTML = html;
+}
+
+const trades = [];
+function appendTrade(msg) {
+  trades.unshift(msg);
+  if (trades.length > MAX_TRADES) trades.length = MAX_TRADES;
+  const body = document.getElementById('tradeBody');
+  let html = '';
+  for (const t of trades) {
+    const cls = t.side === 'buy' ? 'trade-buy' : 'trade-sell';
+    html += `<tr><td>${fmtTime(t.timestamp)}</td><td class="${cls}">${t.side.toUpperCase()}</td>` +
+            `<td>${fmtPrice(t.price)}</td><td>${fmtQty(t.size)}</td><td>${t.created_by || '-'}</td></tr>`;
+  }
+  body.innerHTML = html;
+}
+
+const feedItems = [];
+function appendFeed(msg) {
+  if (!binanceConnected) {
+    binanceConnected = true;
+    document.getElementById('binanceDot').className = 'dot dot-green';
+  }
+  feedItems.unshift(msg);
+  if (feedItems.length > MAX_FEED) feedItems.length = MAX_FEED;
+  const el = document.getElementById('binanceFeed');
+  let html = '';
+  for (const f of feedItems) {
+    const cls = f.side === 'buy' ? 'trade-buy' : 'trade-sell';
+    html += `<div class="feed-item"><span>${fmtTime(f.timestamp)}</span>` +
+            `<span class="${cls}">${f.side.toUpperCase()}</span>` +
+            `<span>${f.price}</span><span>${f.qty}</span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function updateStats(msg) {
+  document.getElementById('statTrades').textContent = msg.total_trades.toLocaleString();
+  document.getElementById('statVolume').textContent = fmtQty(msg.total_volume);
+  document.getElementById('statBuys').textContent = msg.buy_trades.toLocaleString();
+  document.getElementById('statSells').textContent = msg.sell_trades.toLocaleString();
+  document.getElementById('statBinance').textContent = msg.binance_trades.toLocaleString();
+  document.getElementById('statAskLevels').textContent = msg.ask_levels;
+  document.getElementById('statBidLevels').textContent = msg.bid_levels;
+
+  if (msg.best_ask > 0 && msg.best_ask < 9007199254740991) {
+    document.getElementById('statAsk').textContent = fmtPrice(msg.best_ask);
+  } else {
+    document.getElementById('statAsk').textContent = '-';
+  }
+  if (msg.best_bid > -9007199254740991 && msg.best_bid > 0) {
+    document.getElementById('statBid').textContent = fmtPrice(msg.best_bid);
+  } else {
+    document.getElementById('statBid').textContent = '-';
+  }
+  if (msg.best_ask > 0 && msg.best_bid > 0 && msg.best_ask < 9007199254740991 && msg.best_bid > -9007199254740991) {
+    const spread = (msg.best_ask - msg.best_bid) / ONE;
+    document.getElementById('statSpread').textContent = spread.toFixed(2);
+  } else {
+    document.getElementById('statSpread').textContent = '-';
+  }
+
+  const diffEl = document.getElementById('statAvgFeedDiff');
+  if (msg.avg_feed_diff !== undefined && msg.avg_feed_diff !== 0) {
+    const diff = msg.avg_feed_diff;
+    diffEl.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(4) + '%';
+    diffEl.className = 'stat-value ' + (diff >= 0 ? 'green' : 'red');
+  } else {
+    diffEl.textContent = '-';
+    diffEl.className = 'stat-value';
+  }
+}
+
+connect();
+</script>
+</body>
+</html>
