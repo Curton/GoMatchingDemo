@@ -1,4 +1,13 @@
-go.*
-*.md
+# macOS
+.DS_Store
+
+# Go binaries and build artifacts
+*.exe
+*.exe64
+*.dll
+*.test
+*.out
 GoMatchingDemo
+
+# Logs
 log.txt
