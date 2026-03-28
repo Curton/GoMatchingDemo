@@ -201,7 +201,7 @@ func (d *DemoEngine) AdjustSpread() {
 	bestAsk := d.engine.BestAsk()
 	bestBid := d.engine.BestBid()
 
-	if bestAsk == 0 || bestBid == 0 || bestAsk >= 9223372036854775807 {
+	if bestAsk == 0 || bestBid == 0 || bestAsk == math.MaxInt64 {
 		return
 	}
 
@@ -392,7 +392,7 @@ func (d *DemoEngine) ReplenishBook(midPrice float64) {
 
 	if askLevels < 30 {
 		bestAsk := d.engine.BestAsk()
-		if bestAsk > 0 && bestAsk < 9223372036854775807 {
+		if bestAsk > 0 {
 			for i := 0; i < 20; i++ {
 				d.idSeq++
 				price := bestAsk + int64(i+1)*tick
@@ -430,7 +430,7 @@ func (d *DemoEngine) GenerateRandomOrder() {
 	bestAsk := d.engine.BestAsk()
 	bestBid := d.engine.BestBid()
 
-	if bestAsk == 0 || bestBid == 0 || bestAsk >= 9223372036854775807 {
+	if bestAsk == 0 || bestBid == 0 {
 		return
 	}
 
