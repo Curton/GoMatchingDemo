@@ -6,6 +6,9 @@
 
 **[GoMatchingKernel](https://github.com/Curton/GoMatchingKernel) features demonstrated by this project:**
 
+<img width="1920" height="1067" alt="Screenshot 2026-03-29 at 11 56 26 PM" src="https://github.com/user-attachments/assets/2316cae5-ac19-43de-b902-8a1c2a7235f6" />
+
+
 - Submitting limit orders (GTC) and receiving match results via `SubmitOrder` / `MatchedInfoChan`
 - Querying the live order book with `OrderBook()`, `BestAsk()`, `BestBid()`, `AskLength()`, `BidLength()`
 - Engine lifecycle management (`NewMatchingEngine`, `Start`, `Stop`)
